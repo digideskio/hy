@@ -42,7 +42,9 @@
 
 (defn * [&rest args]
   "Shadow * operator for when we need to import / map it against something"
-  (reduce operator.mul args))
+  (if (= (len args) 0)
+    1  ; identity
+    (reduce operator.mul args)))
 
 
 (defn / [&rest args]

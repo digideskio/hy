@@ -423,8 +423,8 @@
   (if (in 'yield (flatten ebody (fn [coll]
                                   (and (instance? HyExpression coll)
                                        (= (first coll) 'fn)))))
-    `(yield-from (let* [~@forms] ~@body))
-    `(let* [~@forms] ~@body)))
+    `(yield-from (let* [~@forms] ~@ebody))
+    `(let* [~@forms] ~@ebody)))
 
 (def *exports* '[Botsbuildbots
                  let

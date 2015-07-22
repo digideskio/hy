@@ -49,7 +49,7 @@
   `(setv ~name (fn ~lambda-list ~@body)))
 
 
-(defmacro let [variables &rest body]
+(defmacro let* [variables &rest body]
   "Execute `body` in the lexical context of `variables`"
   (setv macroed_variables [])
   (if (not (isinstance variables HyList))

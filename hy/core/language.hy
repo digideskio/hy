@@ -415,7 +415,14 @@
         (hyify (. value __name__))
         (catch [] (string value))))))
 
+(defmacro let [forms &rest body]
+  (setv ebody (macroexpand body))
+  (if (in 'yield (flatten ebody))
+    `(yield-from (let* [~@forms] ~@body))
+    `(let* [~@forms] ~@body)))
+
 (def *exports* '[Botsbuildbots
+                 let
                  butlast calling-module-name coll? cons cons? cycle
                  dec distinct disassemble drop drop-last drop-while empty? even?
                  every? first filter filterfalse flatten float? gensym identity

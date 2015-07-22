@@ -39,7 +39,7 @@
       baz))"
 
   (if (not (empty? args))
-    (let [[primary (.pop args 0)]]
+    (let* [[primary (.pop args 0)]]
       (if (isinstance primary HyList)
         ;;; OK. if we have a list, we can go ahead and unpack that
         ;;; as the argument to with.
@@ -104,7 +104,7 @@
    [(empty? args) `(do ~@body)]
    [(= (len args) 2)  `(for* [~@args] ~@body)]
    [true 
-    (let [[alist (slice args 0 nil 2)]]
+    (let* [[alist (slice args 0 nil 2)]]
       `(for* [(, ~@alist) (genexpr (, ~@alist) [~@args])] ~@body))]))
 
 
@@ -127,7 +127,7 @@
     (if (isinstance expression HyExpression)
       `(~(first expression) ~f ~@(rest expression))
       `(~expression ~f)))
-  `(let [[~f ~form]]
+  `(let* [[~f ~form]]
      ~@(map build-form expressions)
      ~f))
 
@@ -169,13 +169,13 @@
 
 
 (defmacro with-gensyms [args &rest body]
-  `(let ~(HyList (map (fn [x] `[~x (gensym '~x)]) args))
+  `(let* ~(HyList (map (fn [x] `[~x (gensym '~x)]) args))
     ~@body))
 
 (defmacro defmacro/g! [name args &rest body]
-  (let [[syms (list (distinct (filter (fn [x] (and (hasattr x "startswith") (.startswith x "g!"))) (flatten body))))]]
+  (let* [[syms (list (distinct (filter (fn [x] (and (hasattr x "startswith") (.startswith x "g!"))) (flatten body))))]]
     `(defmacro ~name [~@args]
-       (let ~(HyList (map (fn [x] `[~x (gensym (slice '~x 2))]) syms))
+       (let* ~(HyList (map (fn [x] `[~x (gensym (slice '~x 2))]) syms))
             ~@body))))
 
 
@@ -200,7 +200,7 @@
 
 (defmacro defmain [args &rest body]
   "Write a function named \"main\" and do the if __main__ dance"
-  (let [[retval (gensym)]
+  (let* [[retval (gensym)]
         [mainfn `(fn [~@args]
                    ~@body)]]
     `(when (= --name-- "__main__")
@@ -212,7 +212,7 @@
 
 (defmacro-alias [defn-alias defun-alias] [names lambda-list &rest body]
   "define one function with several names"
-  (let [[main (first names)]
+  (let* [[main (first names)]
         [aliases (rest names)]]
     (setv ret `(do (defn ~main ~lambda-list ~@body)))
     (for* [name aliases]
@@ -226,7 +226,7 @@
     (do
      (import [requests])
 
-     (let [[r (requests.get
+     (let* [[r (requests.get
                "https://raw.githubusercontent.com/hylang/hy/master/AUTHORS")]]
        (repeat r.text)))
     (catch [e ImportError]

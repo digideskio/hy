@@ -147,16 +147,19 @@
         (if (not (hasattr tree attr))
           (setattr tree attr 1))))
 
-(defn flatten [coll]
+(defn flatten [coll &optional bailon]
   "Return a single flat list expanding all members of coll"
+  (if (is bailon nil)
+    (setv bailon (fn [x] false)))
+
   (if (coll? coll)
-    (_flatten coll [])
+    (_flatten coll [] bailon)
     (raise (TypeError (.format "{0!r} is not a collection" coll)))))
 
-(defn _flatten [coll result]
-  (if (coll? coll)
+(defn _flatten [coll result bailon]
+  (if (and (coll? coll) (not (bailon coll)))
     (do (for* [b coll]
-          (_flatten b result)))
+          (_flatten b result bailon)))
     (.append result coll))
   result)
 
@@ -417,7 +420,9 @@
 
 (defmacro let [forms &rest body]
   (setv ebody (macroexpand body))
-  (if (in 'yield (flatten ebody))
+  (if (in 'yield (flatten ebody (fn [coll]
+                                  (and (instance? HyExpression coll)
+                                       (= (first coll) 'fn)))))
     `(yield-from (let* [~@forms] ~@body))
     `(let* [~@forms] ~@body)))
 

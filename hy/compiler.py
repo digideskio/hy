@@ -485,11 +485,13 @@ class HyASTCompiler(object):
 
     def _parse_lambda_list(self, exprs):
         """ Return FunctionDef parameter values from lambda list."""
-        ll_keywords = ("&rest", "&optional", "&key", "&kwargs")
+        ll_keywords = ("&rest", "&optional", "&key", "&kwonly", "&kwargs")
         ret = Result()
         args = []
         defaults = []
         varargs = None
+        kwonlyargs = []
+        kwonlydefaults = []
         kwargs = None
         lambda_keyword = None
 
@@ -505,6 +507,8 @@ class HyASTCompiler(object):
                                           "arguments or one &key argument")
                     lambda_keyword = expr
                 elif expr == "&key":
+                    lambda_keyword = expr
+                elif expr == "&kwonly":
                     lambda_keyword = expr
                 elif expr == "&kwargs":
                     lambda_keyword = expr
@@ -554,6 +558,24 @@ class HyASTCompiler(object):
                 args.append(k)
                 ret += self.compile(v)
                 defaults.append(ret.force_expr)
+            elif lambda_keyword == "&kwonly":
+                if not PY3:
+                    raise HyTypeError(expr,
+                                      "keyword-only arguments are only "
+                                      "available under Python 3")
+                if isinstance(expr, HyList):
+                    if len(expr) != 2:
+                        raise HyTypeError(expr,
+                                          "keyword-only args should be bare "
+                                          "names or 2-item lists")
+                    k, v = expr
+                    kwonlyargs.append(k)
+                    ret += self.compile(v)
+                    kwonlydefaults.append(ret.force_expr)
+                else:
+                    k = expr
+                    kwonlyargs.append(k)
+                    kwonlydefaults.append(None)
             elif lambda_keyword == "&kwargs":
                 if kwargs:
                     raise HyTypeError(expr,
@@ -561,7 +583,7 @@ class HyASTCompiler(object):
                                       "&kwargs argument")
                 kwargs = str(expr)
 
-        return ret, args, defaults, varargs, kwargs
+        return ret, args, defaults, varargs, kwonlyargs, kwonlydefaults, kwargs
 
     def _storeize(self, name, func=None):
         """Return a new `name` object with an ast.Store() context"""
@@ -1591,12 +1613,28 @@ class HyASTCompiler(object):
             stargs = expr.pop(0)
             if stargs is not None:
                 stargs = self.compile(stargs)
-                ret.expr.starargs = stargs.force_expr
+                if PY35:
+                    stargs_expr = stargs.force_expr
+                    ret.expr.args.append(
+                        ast.Starred(stargs_expr, ast.Load(),
+                                    lineno=stargs_expr.lineno,
+                                    col_offset=stargs_expr.col_offset)
+                    )
+                else:
+                    ret.expr.starargs = stargs.force_expr
                 ret = stargs + ret
 
         if expr:
             kwargs = self.compile(expr.pop(0))
-            ret.expr.kwargs = kwargs.force_expr
+            if PY35:
+                kwargs_expr = kwargs.force_expr
+                ret.expr.keywords.append(
+                    ast.keyword(None, kwargs_expr,
+                                lineno=kwargs_expr.lineno,
+                                col_offset=kwargs_expr.col_offset)
+                )
+            else:
+                ret.expr.kwargs = kwargs.force_expr
             ret = kwargs + ret
 
         return ret
@@ -2010,7 +2048,9 @@ class HyASTCompiler(object):
         if not isinstance(arglist, HyList):
             raise HyTypeError(expression,
                               "First argument to (fn) must be a list")
-        ret, args, defaults, stararg, kwargs = self._parse_lambda_list(arglist)
+
+        (ret, args, defaults, stararg,
+         kwonlyargs, kwonlydefaults, kwargs) = self._parse_lambda_list(arglist)
         for i, arg in enumerate(args):
             if isinstance(arg, HyList):
                 # Destructuring argument
@@ -2033,6 +2073,11 @@ class HyASTCompiler(object):
                             lineno=x.start_line,
                             col_offset=x.start_column) for x in args]
 
+            kwonlyargs = [ast.arg(arg=ast_str(x), annotation=None,
+                                  lineno=x.start_line,
+                                  col_offset=x.start_column)
+                          for x in kwonlyargs]
+
             # XXX: Beware. Beware. This wasn't put into the parse lambda
             # list because it's really just an internal parsing thing.
 
@@ -2049,12 +2094,18 @@ class HyASTCompiler(object):
                              lineno=x.start_line,
                              col_offset=x.start_column) for x in args]
 
+            if PY3:
+                kwonlyargs = [ast.Name(arg=ast_str(x), id=ast_str(x),
+                                       ctx=ast.Param(), lineno=x.start_line,
+                                       col_offset=x.start_column)
+                              for x in kwonlyargs]
+
         args = ast.arguments(
             args=args,
             vararg=stararg,
             kwarg=kwargs,
-            kwonlyargs=[],
-            kw_defaults=[],
+            kwonlyargs=kwonlyargs,
+            kw_defaults=kwonlydefaults,
             defaults=defaults)
 
         body = self._compile_branch(expression)
